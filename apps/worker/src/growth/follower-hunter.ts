@@ -1,14 +1,14 @@
 /**
  * Finds real sports betting accounts to follow.
- * Strategy: visit followers of established accounts, filter for humans, follow them.
- * Never follows bots, parody accounts, or accounts we've already followed.
+ * Uses Claude AI scoring instead of keyword matching — far smarter filtering.
+ * Quick keyword pre-screen eliminates obvious spam before spending API budget.
  */
 import type { Page } from "playwright";
 import { db } from "@sports-engine/db";
+import { scoreAccount } from "@sports-engine/ai";
 import { canAct, recordAction } from "./action-budget.js";
 import { humanClick, humanDelay, humanScroll, organicBrowse } from "./human-behavior.js";
 
-// Seed accounts whose followers are likely our target audience
 const SEED_ACCOUNTS = [
   "ActionNetworkHQ",
   "BettingPros",
@@ -20,18 +20,10 @@ const SEED_ACCOUNTS = [
   "Covers",
 ];
 
-// Keywords that suggest a real betting account worth following
-const POSITIVE_SIGNALS = [
-  "picks", "bets", "betting", "wagering", "handicapper",
-  "lines", "props", "parlay", "sharp", "degen", "fade",
-  "mlb", "nba", "nfl", "nhl", "cbbb",
-];
-
-// Keywords that suggest bot/spam accounts — skip these
-const NEGATIVE_SIGNALS = [
-  "follow back", "followback", "follow for follow", "f4f",
-  "crypto", "nft", "only fans", "onlyfans", "forex",
-  "make money", "dm for picks", "guaranteed wins",
+// Fast pre-screen: reject obvious spam before calling Claude (saves budget)
+const INSTANT_REJECT = [
+  "follow back", "followback", "f4f", "crypto", "nft", "onlyfans",
+  "forex", "guaranteed wins", "dm for picks $", "📈📉",
 ];
 
 export async function runFollowerHunter(page: Page): Promise<number> {
@@ -40,48 +32,47 @@ export async function runFollowerHunter(page: Page): Promise<number> {
     return 0;
   }
 
-  // Pick a random seed account each run — vary the pattern
   const seed = SEED_ACCOUNTS[Math.floor(Math.random() * SEED_ACCOUNTS.length)];
   console.log(`[follower-hunter] Hunting via @${seed}`);
 
   let followed = 0;
 
   try {
-    // Navigate to the seed account's followers page
     await page.goto(`https://x.com/${seed}/followers`, { waitUntil: "networkidle" });
     await humanDelay(2000, 500);
-
-    // Scroll to load more followers
     await humanScroll(page, 600);
     await humanDelay(1500, 400);
 
-    // Find all user cells
-    const userLinks = await page.$$('[data-testid="UserCell"]');
+    const userCells = await page.$$('[data-testid="UserCell"]');
 
-    for (const cell of userLinks) {
+    for (const cell of userCells) {
       if (!(await canAct("FOLLOW"))) break;
 
       try {
-        // Extract username and bio from the cell
-        const username = await cell.$eval(
-          'a[href^="/"]',
-          (el) => el.getAttribute("href")?.replace("/", "") ?? ""
-        ).catch(() => "");
+        const username = await cell
+          .$eval('a[href^="/"]', (el) => el.getAttribute("href")?.replace("/", "") ?? "")
+          .catch(() => "");
 
         if (!username || username.includes("/")) continue;
-
-        const bio = await cell.$eval(
-          '[data-testid="UserDescription"], [class*="bio"]',
-          (el) => el.textContent ?? ""
-        ).catch(() => "");
-
-        // Skip if already followed or already in our DB
         if (await alreadyFollowed(username)) continue;
 
-        // Score this account
-        if (!looksHuman(bio)) continue;
+        const bio = await cell
+          .$eval('[data-testid="UserDescription"]', (el) => el.textContent ?? "")
+          .catch(() => "");
 
-        // Find the follow button inside this cell
+        // Step 1: instant keyword reject (no API cost)
+        if (instantReject(bio)) continue;
+
+        // Step 2: Claude AI scoring
+        const aiScore = await scoreAccount({ username, bio }).catch(() => null);
+
+        if (!aiScore?.relevant) {
+          if (aiScore) {
+            console.log(`[follower-hunter] Skipping @${username} (score ${aiScore.score.toFixed(2)}): ${aiScore.reasoning}`);
+          }
+          continue;
+        }
+
         const followBtn = await cell.$('[data-testid*="follow"]');
         if (!followBtn) continue;
 
@@ -89,23 +80,23 @@ export async function runFollowerHunter(page: Page): Promise<number> {
         if (!btnText?.toLowerCase().includes("follow")) continue;
         if (btnText.toLowerCase().includes("following")) continue;
 
-        // Do some organic browsing before following — don't auto-fire
-        if (Math.random() < 0.3) {
-          await organicBrowse(page, 3000);
-        }
+        if (Math.random() < 0.3) await organicBrowse(page, 3000);
 
-        await humanClick(page, `[data-testid="UserCell"]:has(a[href="/${username}"]) [data-testid*="follow"]`);
+        await humanClick(
+          page,
+          `[data-testid="UserCell"]:has(a[href="/${username}"]) [data-testid*="follow"]`
+        );
         await humanDelay(1200, 400);
 
         await recordAction({ type: "FOLLOW", targetUsername: username });
-        console.log(`[follower-hunter] Followed @${username}`);
+        console.log(
+          `[follower-hunter] Followed @${username} (score ${aiScore.score.toFixed(2)}): ${aiScore.reasoning}`
+        );
         followed++;
 
-        // Randomize gap between follows — 15-45 seconds
         await humanDelay(25000, 10000);
-
       } catch {
-        // Individual cell errors are non-fatal
+        // Non-fatal per-cell error
       }
     }
   } catch (err) {
@@ -115,27 +106,14 @@ export async function runFollowerHunter(page: Page): Promise<number> {
   return followed;
 }
 
-function looksHuman(bio: string): boolean {
+function instantReject(bio: string): boolean {
   const lower = bio.toLowerCase();
-
-  // Must have at least one positive signal
-  const hasPositive = POSITIVE_SIGNALS.some((s) => lower.includes(s));
-  if (!hasPositive) return false;
-
-  // Reject if any negative signal present
-  const hasNegative = NEGATIVE_SIGNALS.some((s) => lower.includes(s));
-  if (hasNegative) return false;
-
-  return true;
+  return INSTANT_REJECT.some((s) => lower.includes(s));
 }
 
 async function alreadyFollowed(username: string): Promise<boolean> {
   const existing = await db.growthAction.findFirst({
-    where: {
-      actionType: "FOLLOW",
-      targetUsername: username,
-      success: true,
-    },
+    where: { actionType: "FOLLOW", targetUsername: username, success: true },
   });
   return !!existing;
 }

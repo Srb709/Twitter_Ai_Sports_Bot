@@ -1,6 +1,7 @@
 import { db } from "@sports-engine/db";
 import { extractPicks } from "@sports-engine/core";
 import { aiExtractPicks } from "@sports-engine/ai";
+import { isComplexPickPost, extractPicksWithThinking } from "@sports-engine/ai";
 
 export async function extractPicksFromPosts(): Promise<number> {
   const unprocessed = await db.sourcePost.findMany({
@@ -26,14 +27,27 @@ export async function extractPicksFromPosts(): Promise<number> {
         continue;
       }
 
-      // Regex-based extraction first (zero cost)
+      // Layer 1: Regex (zero cost, instant)
       const regexPicks = extractPicks(fullText);
 
-      // AI extraction only if regex found nothing
-      const aiPicks =
-        regexPicks.length === 0 && fullText.length > 30
-          ? await aiExtractPicks(fullText).catch(() => [])
-          : [];
+      let aiPicks: Awaited<ReturnType<typeof aiExtractPicks>> = [];
+
+      if (regexPicks.length === 0 && fullText.length > 30) {
+        // Layer 2: Check if the post is complex enough to warrant extended thinking
+        if (isComplexPickPost(fullText)) {
+          // Layer 3: Extended thinking on Sonnet — used for SGPs, parlays, shorthand
+          console.log(`[pick-extractor] Complex post detected — using extended thinking for post ${post.id}`);
+          aiPicks = await extractPicksWithThinking(fullText).catch(() => []);
+
+          // If extended thinking still got nothing, fall back to regular Haiku
+          if (aiPicks.length === 0) {
+            aiPicks = await aiExtractPicks(fullText).catch(() => []);
+          }
+        } else {
+          // Layer 2: Regular Haiku AI extraction
+          aiPicks = await aiExtractPicks(fullText).catch(() => []);
+        }
+      }
 
       const allPicks = [...regexPicks, ...aiPicks];
 

@@ -6,6 +6,7 @@ import { processImages } from "./pipeline/image-handler.js";
 import { extractPicksFromPosts } from "./pipeline/pick-extractor.js";
 import { runClusterPass } from "./pipeline/cluster-processor.js";
 import { generateTweetDrafts } from "./pipeline/tweet-generator.js";
+import { runBriefingGenerator } from "./pipeline/briefing-generator.js";
 import { runFollowerHunter } from "./growth/follower-hunter.js";
 import { runEngagementEngine } from "./growth/engagement-engine.js";
 import { runUnfollowManager } from "./growth/unfollow-manager.js";
@@ -81,6 +82,9 @@ export async function runWorkerLoop(opts: WorkerLoopOptions = {}): Promise<void>
 
       const draftCount = await generateTweetDrafts();
       if (draftCount > 0) console.log(`[worker] Drafts: ${draftCount} created`);
+
+      // Morning briefing (runs once per day, no-ops if already generated)
+      await runBriefingGenerator();
 
       // ── Growth cycle (every N content cycles) ───────────────────────────────
 
