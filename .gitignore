@@ -1,0 +1,31 @@
+node_modules/
+.next/
+dist/
+.turbo/
+*.env
+!.env.example
+
+# Auth state — contains live session cookies, never commit
+auth-state/
+*.auth.json
+*.storage-state.json
+
+# Downloaded media assets
+data/
+media/
+screenshots/
+
+# Prisma generated client (regenerate with db:generate)
+packages/db/src/generated/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/settings.json
+.idea/

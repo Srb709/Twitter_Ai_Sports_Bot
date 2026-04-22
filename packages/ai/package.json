@@ -1,0 +1,14 @@
+{
+  "name": "@sports-engine/ai",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "anthropic": "^0.50.0",
+    "openai": "^4.52.0",
+    "@sports-engine/shared": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.5.0", "@types/node": "^20.14.0" }
+}

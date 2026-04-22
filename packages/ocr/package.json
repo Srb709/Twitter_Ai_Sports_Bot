@@ -1,0 +1,13 @@
+{
+  "name": "@sports-engine/ocr",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "node-tesseract-ocr": "^2.2.1",
+    "sharp": "^0.33.4"
+  },
+  "devDependencies": { "typescript": "^5.5.0", "@types/node": "^20.14.0" }
+}

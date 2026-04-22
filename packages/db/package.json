@@ -1,0 +1,10 @@
+{
+  "name": "@sports-engine/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@prisma/client": "^5.16.0" },
+  "devDependencies": { "typescript": "^5.5.0", "prisma": "^5.16.0" }
+}

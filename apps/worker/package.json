@@ -1,0 +1,30 @@
+{
+  "name": "@sports-engine/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "run:once": "tsx src/index.ts --once",
+    "run:watch": "tsx src/index.ts --watch",
+    "run:debug": "tsx src/index.ts --debug --headed",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sports-engine/shared": "workspace:*",
+    "@sports-engine/db": "workspace:*",
+    "@sports-engine/ocr": "workspace:*",
+    "@sports-engine/ai": "workspace:*",
+    "@sports-engine/core": "workspace:*",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "playwright": "^1.45.0",
+    "axios": "^1.7.2",
+    "p-limit": "^6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "@types/node": "^20.14.0"
+  }
+}

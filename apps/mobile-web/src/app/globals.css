@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  overscroll-behavior: none;
+}
+
+body {
+  @apply bg-gray-950 text-white;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Smooth scrolling within scrollable containers */
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+}

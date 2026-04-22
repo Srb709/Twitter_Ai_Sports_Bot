@@ -1,0 +1,37 @@
+{
+  "name": "sports-content-engine",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "auth:x": "tsx scripts/auth-x.ts",
+    "worker:dev": "tsx --watch apps/worker/src/index.ts",
+    "worker:start": "tsx apps/worker/src/index.ts",
+    "worker:once": "tsx apps/worker/src/index.ts --once",
+    "worker:watch": "tsx apps/worker/src/index.ts --watch",
+    "worker:debug": "tsx apps/worker/src/index.ts --debug --headed",
+    "web:dev": "cd apps/mobile-web && pnpm dev",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:push": "prisma db push --schema=prisma/schema.prisma",
+    "db:studio": "prisma studio --schema=prisma/schema.prisma",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:reset": "prisma migrate reset --schema=prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0",
+    "prettier": "^3.3.0",
+    "@types/node": "^20.14.0",
+    "prisma": "^5.16.0"
+  },
+  "packageManager": "pnpm@9.4.0"
+}

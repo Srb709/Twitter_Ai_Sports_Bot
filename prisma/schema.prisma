@@ -1,0 +1,232 @@
+// Prisma schema for sports-content-engine
+// Run: pnpm db:generate && pnpm db:migrate
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../packages/db/src/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tracked Accounts ─────────────────────────────────────────────────────────
+
+model TrackedAccount {
+  id                    String       @id @default(cuid())
+  username              String       @unique
+  displayName           String       @default("")
+  active                Boolean      @default(true)
+  priority              Int          @default(50)   // 1 = highest
+  sportFocus            String[]     @default([])   // ["MLB","NBA",...]
+  scanIntervalMinutes   Int?                        // null = use global default
+  notes                 String       @default("")
+  lastScannedAt         DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  posts SourcePost[]
+
+  @@index([active, priority])
+}
+
+// ─── Source Posts ──────────────────────────────────────────────────────────────
+
+model SourcePost {
+  id                String         @id @default(cuid())
+  trackedAccountId  String
+  externalUrl       String         @unique
+  externalPostKey   String         @unique  // tweet id extracted from URL
+  textContent       String         @default("")
+  contentHash       String                  // sha256 of normalised text
+  postedAt          DateTime?
+  scrapedAt         DateTime       @default(now())
+  screenshotPath    String?
+  rawJson           Json?                   // raw intercepted API payload
+  processed         Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+
+  trackedAccount    TrackedAccount @relation(fields: [trackedAccountId], references: [id])
+  media             SourceMedia[]
+  picks             ExtractedPick[]
+
+  @@index([trackedAccountId, scrapedAt])
+  @@index([contentHash])
+}
+
+// ─── Source Media ──────────────────────────────────────────────────────────────
+
+model SourceMedia {
+  id           String    @id @default(cuid())
+  sourcePostId String
+  mediaUrl     String?
+  filePath     String?
+  mimeType     String    @default("image/jpeg")
+  width        Int?
+  height       Int?
+  ocrNeeded    Boolean   @default(true)
+  ocrStatus    OcrStatus @default(PENDING)
+  ocrText      String?
+  ocrConfidence Float?
+  createdAt    DateTime  @default(now())
+
+  sourcePost   SourcePost @relation(fields: [sourcePostId], references: [id], onDelete: Cascade)
+
+  @@index([sourcePostId])
+  @@index([ocrStatus])
+}
+
+// ─── Extracted Picks ───────────────────────────────────────────────────────────
+
+model ExtractedPick {
+  id              String     @id @default(cuid())
+  sourcePostId    String
+  sport           String     // "MLB", "NBA", etc.
+  league          String?
+  gameLabel       String?    // "NYY vs BOS"
+  teams           String[]
+  playerName      String?
+  marketType      MarketType
+  betSide         BetSide?
+  line            Float?
+  odds            Int?       // American odds
+  normalizedLabel String     // "Acuña Jr. Over 1.5 hits"
+  evidenceText    String     // raw text used for extraction
+  confidence      Float      @default(0.5)
+  createdAt       DateTime   @default(now())
+
+  sourcePost      SourcePost         @relation(fields: [sourcePostId], references: [id], onDelete: Cascade)
+  clusterMembers  PickClusterMembership[]
+
+  @@index([sourcePostId])
+  @@index([sport, marketType])
+  @@index([playerName])
+}
+
+// ─── Pick Clusters ─────────────────────────────────────────────────────────────
+
+model PickCluster {
+  id          String      @id @default(cuid())
+  label       String
+  sport       String?
+  clusterType ClusterType
+  confidence  Float       @default(0.5)
+  trendScore  Float       @default(0.0)
+  supportCount Int        @default(0)
+  tags        String[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  members     PickClusterMembership[]
+  tweetDrafts TweetDraftCluster[]
+
+  @@index([trendScore])
+  @@index([updatedAt])
+}
+
+model PickClusterMembership {
+  id              String       @id @default(cuid())
+  clusterId       String
+  extractedPickId String
+  createdAt       DateTime     @default(now())
+
+  cluster         PickCluster  @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  extractedPick   ExtractedPick @relation(fields: [extractedPickId], references: [id], onDelete: Cascade)
+
+  @@unique([clusterId, extractedPickId])
+}
+
+// ─── Tweet Drafts ──────────────────────────────────────────────────────────────
+
+model TweetDraft {
+  id               String      @id @default(cuid())
+  tweetType        TweetType
+  text             String
+  status           TweetStatus @default(DRAFT)
+  generationModel  String
+  sourceEvidence   Json?       // array of post ids / pick ids used
+  approvalNote     String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  clusters         TweetDraftCluster[]
+
+  @@index([status, createdAt])
+}
+
+model TweetDraftCluster {
+  id           String     @id @default(cuid())
+  tweetDraftId String
+  clusterId    String
+
+  tweetDraft   TweetDraft  @relation(fields: [tweetDraftId], references: [id], onDelete: Cascade)
+  cluster      PickCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
+  @@unique([tweetDraftId, clusterId])
+}
+
+// ─── System Settings ───────────────────────────────────────────────────────────
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────────
+
+enum OcrStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+enum MarketType {
+  MONEYLINE
+  SPREAD
+  TOTAL
+  PLAYER_PROP
+  NRFI
+  YRFI
+  PARLAY
+  OTHER
+}
+
+enum BetSide {
+  OVER
+  UNDER
+  HOME
+  AWAY
+  YES
+  NO
+}
+
+enum TweetStatus {
+  DRAFT
+  APPROVED
+  POSTED
+  REJECTED
+}
+
+enum TweetType {
+  MOST_BACKED
+  PICK_OF_DAY
+  NRFI_YRFI
+  ENGAGEMENT_QUESTION
+  POLL_STYLE
+  PUBLIC_HEAVY
+  FADE_ANGLE
+  THREAD_STARTER
+}
+
+enum ClusterType {
+  SAME_PICK
+  SAME_PLAYER
+  SAME_GAME
+  NRFI_YRFI
+  FADE_TARGET
+}
