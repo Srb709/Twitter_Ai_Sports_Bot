@@ -175,6 +175,24 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+// ─── Growth Actions ────────────────────────────────────────────────────────────
+// Audit log of every action the growth engine takes.
+// Used to: enforce daily budgets, avoid re-liking/re-following, track unfollows.
+
+model GrowthAction {
+  id             String           @id @default(cuid())
+  actionType     GrowthActionType
+  targetUsername String?          // who we followed/unfollowed/replied to
+  targetPostKey  String?          // tweet id we liked/replied to
+  replyText      String?          // what we said (for dedup)
+  success        Boolean          @default(true)
+  performedAt    DateTime         @default(now())
+
+  @@index([actionType, performedAt])
+  @@index([targetUsername, actionType])
+  @@index([targetPostKey, actionType])
+}
+
 // ─── Enums ─────────────────────────────────────────────────────────────────────
 
 enum OcrStatus {
@@ -229,4 +247,13 @@ enum ClusterType {
   SAME_GAME
   NRFI_YRFI
   FADE_TARGET
+}
+
+enum GrowthActionType {
+  FOLLOW
+  UNFOLLOW
+  LIKE
+  REPLY
+  POST
+  BROWSE
 }
